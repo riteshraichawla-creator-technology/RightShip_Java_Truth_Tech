@@ -1,0 +1,89 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:userdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driverClassName: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+      show-sql: true
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
+    properties:
+      hibernate.format_sql: true
+      hibernate:
+        connection:
+          release_mode: auto
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  cloud:
+    gateway:
+      httpserver:
+        wiretap: true
+      httpclient:
+        wiretap: true
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      server:
+        webflux:
+          routes:
+            - id: user-service
+              uri: lb://user-service
+              predicates:
+                - Path=/api/users/**
+              filters:
+                - StripPrefix=2
+                - AddRequestHeader=X-From-Gateway, true
+                - name: CircuitBreaker
+                  args:
+                    name: userCB
+                    fallbackUri: forward:/fallback/users
+
+            - id: order-service
+              uri: lb://order-service
+              predicates:
+                - Path=/api/orders/**
+              filters:
+                - StripPrefix=2
+                - name: CircuitBreaker
+                  args:
+                    name: orderCB
+                    fallbackUri: forward:/fallback/orders
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://your-idp.example.com/realms/your-realm
+
+
+logging:
+  level:
+    org.hibernate.SQL: debug
+    org.hibernate.orm.jdbc.bind: trace
+    reactor.netty: DEBUG
+    org.springframework.cloud.gateway: DEBUG
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs       # JSON
+  swagger-ui:
+    path: /swagger-ui.html
+  writer-with-default-pretty-printer: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  tracing:
+    sampling:
+      probability: 1.0
